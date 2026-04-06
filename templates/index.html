@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MovieMatch</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='index.css') }}">
+</head>
+<body>
+    <h1>MovieMatch</h1>
+    <p>Enter a movie title to get recommendations based on different algorithms.</p>
+
+    <form method="POST">
+        <input
+            type="text"
+            name="query"
+            placeholder="Enter a movie title"
+            value="{{ query }}"
+            required
+        >
+        <button type="submit">Get Recommendations</button>
+    </form>
+
+    {% if error_message %}
+        <p class="error">{{ error_message }}</p>
+    {% endif %}
+
+    {% if seed_movie %}
+        <div class="card seed-info">
+            <h2>Seed Movie</h2>
+            <p><strong>Title:</strong> {{ seed_movie.title }}</p>
+            <p><strong>Rating:</strong> {{ seed_movie.rating }}/10</p>
+            <p><strong>Genres:</strong> {{ ", ".join(seed_movie.genres) }}</p>
+        </div>
+    {% endif %}
+
+    {% for algorithm_name, recommendations in results_by_algorithm.items() %}
+    <div class="card">
+        <h2>{{ algorithm_name }}</h2>
+
+        {% if recommendations %}
+            <ul>
+                {% for item in recommendations %}
+                    <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No recommendations generated.</p>
+        {% endif %}
+    </div>
+{% endfor %}
+</body>
+</html>
