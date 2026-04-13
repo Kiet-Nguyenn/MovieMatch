@@ -5,49 +5,136 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MovieMatch</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='index.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h1>MovieMatch</h1>
-    <p>Enter a movie title to get recommendations based on different algorithms.</p>
+    <nav class="navbar">
+        <div class="nav-title">MovieMatch</div>
 
-    <form method="POST">
-        <input
-            type="text"
-            name="query"
-            placeholder="Enter a movie title"
-            value="{{ query }}"
-            required
-        >
-        <button type="submit">Get Recommendations</button>
-    </form>
+        <form method="POST" class="search-form">
+            <input
+                type="text"
+                name="query"
+                class="search-input"
+                placeholder="Type movie title here..."
+                value="{{ query }}"
+                required
+            >
+            <button type="submit" class="search-button">Search</button>
+        </form>
+    </nav>
 
-    {% if error_message %}
-        <p class="error">{{ error_message }}</p>
-    {% endif %}
+    <main class="main-content">
+        {% if error_message %}
+            <div class="empty-state">
+                <h1>{{ error_message }}</h1>
+            </div>
 
-    {% if seed_movie %}
-        <div class="card seed-info">
-            <h2>Seed Movie</h2>
-            <p><strong>Title:</strong> {{ seed_movie.title }}</p>
-            <p><strong>Rating:</strong> {{ seed_movie.rating }}/10</p>
-            <p><strong>Genres:</strong> {{ ", ".join(seed_movie.genres) }}</p>
-        </div>
-    {% endif %}
+        {% elif results_by_algorithm %}
+            {% for algorithm_name, recommendations in results_by_algorithm.items() %}
+                <section class="recommendation-section">
+                    <h2 class="section-title">{{ algorithm_name }}</h2>
 
-    {% for algorithm_name, recommendations in results_by_algorithm.items() %}
-    <div class="card">
-        <h2>{{ algorithm_name }}</h2>
+                    {% if recommendations %}
+                        <div class="card-row">
+                            {% for item in recommendations %}
+                                <div class="movie-card">
+                                    <div class="movie-title">
+                                        {{ item.title }}
+                                    </div>
+                                    <div class="movie-genre">
+                                        Genres: {{ item.genres }}
+                                    </div>
+                                    <div class="movie-score">
+                                        Score: {{ item.score }}
+                                    </div>
+                                    
 
-        {% if recommendations %}
-            <ul>
-                {% for item in recommendations %}
-                    <li>{{ item }}</li>
-                {% endfor %}
-            </ul>
+                                    <button 
+                                        type="button" 
+                                        class="view-button"
+                                        data-title="{{ item.title }}"
+                                        data-score="{{ item.score }}"
+                                        data-rating="{{ item.rating }}"
+                                        data-genres="{{ item.genres }}"
+                                        data-runtime="{{ item.runtime }}"
+                                        data-metascore="{{ item.metascore }}"
+                                        data-director="{{ item.director }}"
+                                        data-cast="{{ item.cast }}"
+                                        data-description="{{ item.description }}"
+                                    >
+                                        View
+                                    </button>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="no-results-text">No recommendations generated.</p>
+                    {% endif %}
+                </section>
+            {% endfor %}
+
         {% else %}
-            <p>No recommendations generated.</p>
+            <div class="empty-state">
+                <h1>No Recommendations Made</h1>
+            </div>
         {% endif %}
+    </main>
+
+    <div id="movie-modal" class="modal hidden">
+        <div class="modal-content">
+            <button type="button" id="close-modal" class="close-button">&times;</button>
+
+            <h2 id="modal-title" class="modal-title"></h2>
+            <p id="modal-score"></p>
+            <p id="modal-rating"></p>
+            <p id="modal-genres"></p>
+            <p id="modal-runtime"></p>
+            <p id="modal-metascore"></p>
+            <p id="modal-director"></p>
+            <p id="modal-cast"></p>
+            <p id="modal-description"></p>
+        </div>
     </div>
-{% endfor %}
+    <script>
+        const modal = document.getElementById("movie-modal");
+        const closeModalBtn = document.getElementById("close-modal");
+
+        const modalTitle = document.getElementById("modal-title");
+        const modalScore = document.getElementById("modal-score");
+        const modalRating = document.getElementById("modal-rating");
+        const modalGenres = document.getElementById("modal-genres");
+        const modalRuntime = document.getElementById("modal-runtime");
+        const modalMetascore = document.getElementById("modal-metascore");
+        const modalDirector = document.getElementById("modal-director");
+        const modalCast = document.getElementById("modal-cast");
+        const modalDescription = document.getElementById("modal-description");
+
+        document.querySelectorAll(".view-button").forEach(button => {
+            button.addEventListener("click", () => {
+                modalTitle.textContent = button.dataset.title || "Unknown Title";
+                modalScore.innerHTML = "<strong>Score:</strong> " + (button.dataset.score || "N/A");
+                modalRating.innerHTML = "<strong>Rating:</strong> " + (button.dataset.rating || "N/A");
+                modalGenres.innerHTML = "<strong>Genres:</strong> " + (button.dataset.genres || "N/A");
+                modalRuntime.innerHTML = "<strong>Runtime:</strong> " + (button.dataset.runtime || "N/A") + " minutes";
+                modalMetascore.innerHTML = "<strong>Metascore:</strong> " + (button.dataset.metascore || "N/A");
+                modalDirector.innerHTML = "<strong>Director:</strong> " + (button.dataset.director || "N/A");
+                modalCast.innerHTML = "<strong>Cast:</strong> " + (button.dataset.cast || "N/A");
+                modalDescription.innerHTML = "<strong>Description:</strong> " + (button.dataset.description || "N/A");
+                console.log("clicked");
+                modal.classList.remove("hidden");
+            });
+        });
+
+        closeModalBtn.addEventListener("click", () => {
+            modal.classList.add("hidden");
+        });
+
+        modal.addEventListener("click", (event) => {
+            if (event.target === modal) {
+                modal.classList.add("hidden");
+            }
+        });
+    </script>
 </body>
 </html>

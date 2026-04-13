@@ -7,14 +7,13 @@ from src.data import Dataset
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from src.data import Dataset
 from src.recommender import ContentBasedRecommender, PopularityRecommender, HybridRecommender, UserBasedRecommender
 
 app = Flask(__name__)
 
 algorithms = [
-    ("Content-Based", ContentBasedRecommender()),
-    ("Popularity-Based", PopularityRecommender()),
+    ("Similar Content", ContentBasedRecommender()),
+    ("Similar Popularity", PopularityRecommender()),
     ("Hybrid (60% Content + 40% Popularity)", HybridRecommender()),
     ("User-Based (Collaborative)", UserBasedRecommender())
 ]
@@ -54,12 +53,24 @@ def home():
                         results_by_algorithm[name] = []
                         continue
 
-                    results_by_algorithm[name] = [
-                    f"{movie.title} - {score:.4f}"
-                    for movie, score in recommendations
+                    results_by_algorithm[name] =  [
+                        {
+                            "title": movie.title,
+                            "score": f"{score:.4f}",
+                            "rating": movie.rating,
+                            "genres": ", ".join(movie.genres) if movie.genres else "N/A",
+                            "runtime": movie.runtime,
+                            "metascore": movie.metascore,
+                            "gross": movie.gross,
+                            "director": movie.director,
+                            "cast": ", ".join(movie.cast) if movie.cast else "N/A",
+                            "description": movie.description
+                        }
+                        for movie, score in recommendations
                     ]
 
                 except Exception as e:
+                    print("algorithm failed:", name, e)
                     results_by_algorithm[name] = [f"Error: {e}"]
 
     return render_template(
