@@ -11,15 +11,24 @@
     <nav class="navbar">
         <div class="nav-title">MovieMatch</div>
 
-        <form method="POST" class="search-form">
-            <input
-                type="text"
-                name="query"
-                class="search-input"
-                placeholder="Type movie title here..."
-                value="{{ query }}"
-                required
-            >
+        <form method="POST" class="search-form" id="search-form" autocomplete="off">
+            <div class="autocomplete">
+                <input type="hidden" name="movie_id" id="movie-id-input" value="{{ selected_movie_id }}">
+                <input
+                    type="text"
+                    name="query"
+                    id="movie-search"
+                    class="search-input"
+                    placeholder="Start typing — pick a movie from the list…"
+                    value="{{ query }}"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-autocomplete="list"
+                    aria-controls="movie-suggestions"
+                    aria-expanded="false"
+                >
+                <ul class="movie-suggestions" id="movie-suggestions" role="listbox" hidden></ul>
+            </div>
             <button type="submit" class="search-button">Search</button>
         </form>
     </nav>
@@ -135,6 +144,158 @@
                 modal.classList.add("hidden");
             }
         });
+
+        (function () {
+            const movies = {{ movie_autocomplete_options|tojson }};
+            const form = document.getElementById("search-form");
+            const input = document.getElementById("movie-search");
+            const hiddenId = document.getElementById("movie-id-input");
+            const listEl = document.getElementById("movie-suggestions");
+
+            let activeIndex = -1;
+            let visibleItems = [];
+            let boundSelection = "";
+
+            function norm(s) {
+                return (s || "").trim().toLowerCase();
+            }
+
+            function findExact(value) {
+                const n = norm(value);
+                return movies.find(function (m) { return m.label.toLowerCase() === n; });
+            }
+
+            function filterSuggestions(q) {
+                const n = norm(q);
+                if (!n) return [];
+                const starts = [];
+                const rest = [];
+                for (let i = 0; i < movies.length; i++) {
+                    const m = movies[i];
+                    const l = m.label.toLowerCase();
+                    if (l.indexOf(n) !== -1) {
+                        if (l.indexOf(n) === 0) starts.push(m);
+                        else rest.push(m);
+                    }
+                }
+                return starts.concat(rest).slice(0, 50);
+            }
+
+            function syncSelectionBinding() {
+                const v = input.value;
+                if (boundSelection && norm(v) !== norm(boundSelection)) {
+                    hiddenId.value = "";
+                    boundSelection = "";
+                }
+            }
+
+            function renderList(items) {
+                visibleItems = items;
+                listEl.innerHTML = "";
+                activeIndex = items.length ? 0 : -1;
+                if (!items.length) {
+                    listEl.hidden = true;
+                    input.setAttribute("aria-expanded", "false");
+                    return;
+                }
+                listEl.hidden = false;
+                input.setAttribute("aria-expanded", "true");
+                items.forEach(function (m, idx) {
+                    const li = document.createElement("li");
+                    li.setAttribute("role", "option");
+                    li.id = "movie-opt-" + idx;
+                    li.textContent = m.label;
+                    li.className = "movie-suggestion-item" + (idx === 0 ? " is-active" : "");
+                    li.addEventListener("mousedown", function (e) {
+                        e.preventDefault();
+                        pick(m.id, m.label);
+                    });
+                    listEl.appendChild(li);
+                });
+            }
+
+            function highlightActive() {
+                const nodes = listEl.querySelectorAll(".movie-suggestion-item");
+                nodes.forEach(function (node, idx) {
+                    node.classList.toggle("is-active", idx === activeIndex);
+                });
+                if (activeIndex >= 0 && nodes[activeIndex]) {
+                    input.setAttribute("aria-activedescendant", "movie-opt-" + activeIndex);
+                } else {
+                    input.removeAttribute("aria-activedescendant");
+                }
+            }
+
+            function pick(id, label) {
+                hiddenId.value = id;
+                input.value = label;
+                boundSelection = label;
+                visibleItems = [];
+                listEl.hidden = true;
+                input.setAttribute("aria-expanded", "false");
+                listEl.innerHTML = "";
+                activeIndex = -1;
+            }
+
+            input.addEventListener("input", function () {
+                syncSelectionBinding();
+                renderList(filterSuggestions(input.value));
+            });
+
+            input.addEventListener("keydown", function (e) {
+                if (listEl.hidden || !listEl.children.length) return;
+                const max = listEl.children.length - 1;
+                if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    activeIndex = Math.min(activeIndex + 1, max);
+                    highlightActive();
+                } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    activeIndex = Math.max(activeIndex - 1, 0);
+                    highlightActive();
+                } else if (e.key === "Enter" && activeIndex >= 0 && visibleItems.length) {
+                    e.preventDefault();
+                    const item = visibleItems[activeIndex];
+                    if (item) {
+                        pick(item.id, item.label);
+                        form.requestSubmit();
+                    }
+                } else if (e.key === "Escape") {
+                    listEl.hidden = true;
+                    input.setAttribute("aria-expanded", "false");
+                }
+            });
+
+            document.addEventListener("click", function (e) {
+                if (!form.contains(e.target)) {
+                    listEl.hidden = true;
+                    input.setAttribute("aria-expanded", "false");
+                }
+            });
+
+            form.addEventListener("submit", function (e) {
+                syncSelectionBinding();
+                let id = hiddenId.value.trim();
+                if (!id || !movies.some(function (m) { return m.id === id; })) {
+                    const exact = findExact(input.value);
+                    if (exact) {
+                        hiddenId.value = exact.id;
+                        id = exact.id;
+                        boundSelection = exact.label;
+                    }
+                }
+                if (!id) {
+                    e.preventDefault();
+                    input.focus();
+                    return;
+                }
+            });
+
+            if (hiddenId.value && input.value) {
+                const match = movies.find(function (m) { return m.id === hiddenId.value; });
+                if (match) boundSelection = match.label;
+            }
+        })();
     </script>
 </body>
 </html>

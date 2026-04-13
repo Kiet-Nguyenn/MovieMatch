@@ -18,6 +18,40 @@ body {
     max-width: 700px;
 }
 
+.autocomplete {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+
+.movie-suggestions {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    max-height: 280px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 4px 0;
+    list-style: none;
+    background: #fff;
+    color: #111;
+    border-radius: 4px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    z-index: 50;
+}
+
+.movie-suggestion-item {
+    padding: 10px 14px;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.movie-suggestion-item:hover,
+.movie-suggestion-item.is-active {
+    background-color: #eee6e6;
+}
+
 .main-content {
     padding: 32px;
 }

@@ -26,6 +26,10 @@ try:
 except Exception as e:
     print(f"Error loading dataset: {e}")
 
+movie_autocomplete_options = dataset.get_autocomplete_movie_options() if len(dataset) else []
+movie_id_to_label = {opt["id"]: opt["label"] for opt in movie_autocomplete_options}
+
+
 @app.route("/", methods=["GET", "POST"])
 def home():
     results_by_algorithm = {}
@@ -34,16 +38,17 @@ def home():
     query = ""
 
     if request.method == "POST":
-        query = request.form.get("query", "").strip()
+        draft_query = request.form.get("query", "").strip()
+        movie_id = request.form.get("movie_id", "").strip()
+        seed_movie = dataset.get_movie(movie_id) if movie_id else None
 
-        if query:
-            seed_movies = dataset.search_by_title(query)
-
-            if not seed_movies:
-                all_movies = dataset.get_all_movies()
-                seed_movie = sorted(all_movies, key=lambda m: m.rating, reverse=True)[0]
-            else:
-                seed_movie = seed_movies[0]
+        if not movie_id and not draft_query:
+            pass
+        elif not seed_movie:
+            error_message = "Choose a movie from the suggestions — only titles from the loaded dataset are allowed."
+            query = draft_query
+        else:
+            query = movie_id_to_label.get(movie_id, seed_movie.title)
 
             for name, recommender in algorithms:
                 try:
@@ -73,12 +78,16 @@ def home():
                     print("algorithm failed:", name, e)
                     results_by_algorithm[name] = [f"Error: {e}"]
 
+    selected_movie_id = seed_movie.id if seed_movie else ""
+
     return render_template(
         "index.html",
         query=query,
+        selected_movie_id=selected_movie_id,
         seed_movie=seed_movie,
         results_by_algorithm=results_by_algorithm,
-        error_message=error_message
+        error_message=error_message,
+        movie_autocomplete_options=movie_autocomplete_options,
     )
 
 
