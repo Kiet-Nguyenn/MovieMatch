@@ -1,5 +1,6 @@
 import ast
 import csv
+from collections import Counter
 from typing import List, Dict, Set, Optional, Tuple
 
 
@@ -250,6 +251,30 @@ class Dataset:
         """Get all unique actors in the dataset."""
         return set(self.cast_index.keys())
     
+    def get_autocomplete_movie_options(self) -> List[Dict[str, str]]:
+        """
+        Return {id, label} for each loaded movie with unique display labels.
+        Duplicate titles are disambiguated with year or id.
+        """
+        movies = self.get_all_movies()
+        title_counts = Counter(m.title for m in movies)
+        options: List[Dict[str, str]] = []
+        for m in movies:
+            if title_counts[m.title] == 1:
+                label = m.title
+            else:
+                if m.year is not None:
+                    label = f"{m.title} ({m.year})"
+                else:
+                    label = f"{m.title} [{m.id}]"
+            options.append({"id": m.id, "label": label})
+        label_counts = Counter(o["label"] for o in options)
+        for o in options:
+            if label_counts[o["label"]] > 1:
+                o["label"] = f"{o['label']} [{o['id']}]"
+        options.sort(key=lambda x: x["label"].lower())
+        return options
+
     def search_by_title(self, query: str, limit: int = 10) -> List[Movie]:
         """
         Search for movies by title (substring matching).
