@@ -15,12 +15,15 @@ body {
     align-items: center;
     gap: 8px;
     flex: 1;
+    min-width: 0;
     max-width: 700px;
 }
 
 .autocomplete {
     position: relative;
-    flex: 1;
+    /* ~width of placeholder "Type movie title here..." at 1rem + padding */
+    flex: 0 1 32ch;
+    max-width: 100%;
     min-width: 0;
 }
 
