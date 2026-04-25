@@ -304,26 +304,43 @@ body {
     background-color: #eee;
 }
 
-/* PROFILE FORM */
+.profile-summary {
+    margin-top: 12px;
+    margin-bottom: 20px;
+}
+
+.profile-summary p {
+    font-size: 1rem;
+    margin-bottom: 12px;
+    line-height: 1.5;
+}
+
 .profile-form {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
     margin-top: 10px;
 }
 
+.profile-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-weight: 600;
+    color: #222;
+}
+
 .profile-form input {
-    height: 40px;
+    height: 42px;
     padding: 0 10px;
-    border: 1px solid #ccc;
+    border: 1px solid #bbb;
     border-radius: 4px;
     font-size: 0.95rem;
 }
 
-/* SAVE BUTTON */
 .save-button {
     margin-top: 10px;
-    padding: 10px;
+    padding: 11px 16px;
     background-color: #500000;
     color: white;
     border: none;
@@ -334,4 +351,70 @@ body {
 
 .save-button:hover {
     background-color: #3d0000;
+}
+
+.preference-picker {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.preference-search {
+    height: 42px;
+    padding: 0 10px;
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    font-size: 0.95rem;
+}
+
+.preference-suggestions {
+    position: absolute;
+    top: 68px;
+    left: 0;
+    right: 0;
+    max-height: 180px;
+    overflow-y: auto;
+    list-style: none;
+    background: white;
+    border-radius: 4px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    z-index: 2000;
+}
+
+.preference-suggestion-item {
+    padding: 10px 12px;
+    cursor: pointer;
+}
+
+.preference-suggestion-item:hover {
+    background-color: #eee6e6;
+}
+
+.chip-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 34px;
+}
+
+.preference-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background-color: #eee6e6;
+    color: #500000;
+    padding: 7px 10px;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.chip-remove {
+    border: none;
+    background: transparent;
+    color: #500000;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
 }

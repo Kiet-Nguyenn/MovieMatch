@@ -12,6 +12,7 @@
         <div class="nav-title">MovieMatch</div>
 
         <form method="POST" class="search-form" id="search-form" autocomplete="off">
+            <input type="hidden" name="user_profile" id="user-profile-input">
             <div class="autocomplete">
                 <input type="hidden" name="movie_id" id="movie-id-input" value="{{ selected_movie_id }}">
                 <input
@@ -30,7 +31,7 @@
                 <ul class="movie-suggestions" id="movie-suggestions" role="listbox" hidden></ul>
             </div>
             <button type="submit" class="search-button">Search</button>
-            <button type="button" id="open-profile" class="profile-button">User Preferences</button>
+            <button type="button" id="open-profile-view" class="profile-button">User Preferences</button>
         </form>
     </nav>
 
@@ -109,17 +110,58 @@
     </div>
 
     <!-- Profile Modal -->
-    <div id="profile-modal" class="modal hidden">
+     <div id="profile-view-modal" class="modal hidden">
         <div class="modal-content">
-            <button type="button" id="close-profile" class="close-button">&times;</button>
+            <button type="button" id="close-profile-view" class="close-button">&times;</button>
 
             <h2 class="modal-title">User Preferences</h2>
 
+            <div class="profile-summary">
+                <p><strong>Genres:</strong> <span id="view-genres">None saved</span></p>
+                <p><strong>Actors:</strong> <span id="view-actors">None saved</span></p>
+                <p><strong>Directors:</strong> <span id="view-directors">None saved</span></p>
+                <p><strong>Liked Movies:</strong> <span id="view-liked-movies">None saved</span></p>
+            </div>
+
+            <button type="button" id="open-profile-edit" class="save-button">
+                Edit Preferences
+            </button>
+        </div>
+    </div>
+    <div id="profile-edit-modal" class="modal hidden">
+        <div class="modal-content">
+            <button type="button" id="close-profile-edit" class="close-button">&times;</button>
+
+            <h2 class="modal-title">Edit Preferences</h2>
+
             <div class="profile-form">
-                <input id="profile-genres" placeholder="Genres: Action, Sci-Fi">
-                <input id="profile-actors" placeholder="Actors: Leonardo DiCaprio">
-                <input id="profile-directors" placeholder="Directors: Christopher Nolan">
-                <input id="profile-liked-movies" placeholder="Liked Movies: Inception, Interstellar">
+                <div class="preference-picker">
+                    <label>Genres</label>
+                    <input id="genre-search" class="preference-search" placeholder="Search genres...">
+                    <ul id="genre-suggestions" class="preference-suggestions" hidden></ul>
+                    <div id="genre-chips" class="chip-container"></div>
+                </div>
+
+                <div class="preference-picker">
+                    <label>Favorite Actors</label>
+                    <input id="actor-search" class="preference-search" placeholder="Search actors...">
+                    <ul id="actor-suggestions" class="preference-suggestions" hidden></ul>
+                    <div id="actor-chips" class="chip-container"></div>
+                </div>
+
+                <div class="preference-picker">
+                    <label>Favorite Directors</label>
+                    <input id="director-search" class="preference-search" placeholder="Search directors...">
+                    <ul id="director-suggestions" class="preference-suggestions" hidden></ul>
+                    <div id="director-chips" class="chip-container"></div>
+                </div>
+
+                <div class="preference-picker">
+                    <label>Liked Movies</label>
+                    <input id="liked-movie-search" class="preference-search" placeholder="Search movies...">
+                    <ul id="liked-movie-suggestions" class="preference-suggestions" hidden></ul>
+                    <div id="liked-movie-chips" class="chip-container"></div>
+                </div>
 
                 <button type="button" id="save-profile" class="save-button">
                     Save Preferences
@@ -141,6 +183,13 @@
         const modalDirector = document.getElementById("modal-director");
         const modalCast = document.getElementById("modal-cast");
         const modalDescription = document.getElementById("modal-description");
+
+        const preferenceOptions = {
+            genres: {{ genre_options|tojson }},
+            actors: {{ actor_options|tojson }},
+            directors: {{ director_options|tojson }},
+            likedMovies: {{ liked_movie_options|tojson }}
+        };
 
         document.querySelectorAll(".view-button").forEach(button => {
             button.addEventListener("click", () => {
@@ -296,7 +345,24 @@
                 }
             });
 
+            function attachUserProfileToSearch() {
+                const profileInput = document.getElementById("user-profile-input");
+                const savedProfile = localStorage.getItem("movieMatchProfile");
+
+                if (savedProfile) {
+                    profileInput.value = savedProfile;
+                } else {
+                    profileInput.value = JSON.stringify({
+                        genres: [],
+                        actors: [],
+                        directors: [],
+                        likedMovies: []
+                    });
+                }
+            }
+
             form.addEventListener("submit", function (e) {
+                attachUserProfileToSearch();
                 syncSelectionBinding();
                 let id = hiddenId.value.trim();
                 if (!id || !movies.some(function (m) { return m.id === id; })) {
@@ -320,27 +386,16 @@
             }
         })();
 
-        const profileModal = document.getElementById("profile-modal");
-        const openProfileBtn = document.getElementById("open-profile");
-        const closeProfileBtn = document.getElementById("close-profile");
+        // ------ User Preferences Modal Logic ------
+        const profileViewModal = document.getElementById("profile-view-modal");
+        const profileEditModal = document.getElementById("profile-edit-modal");
 
-        // Open modal
-        openProfileBtn.addEventListener("click", () => {
-            profileModal.classList.remove("hidden");
-        });
+        const openProfileViewBtn = document.getElementById("open-profile-view");
+        const closeProfileViewBtn = document.getElementById("close-profile-view");
+        const openProfileEditBtn = document.getElementById("open-profile-edit");
+        const closeProfileEditBtn = document.getElementById("close-profile-edit");
+        const saveProfileBtn = document.getElementById("save-profile");
 
-        // Close modal
-        closeProfileBtn.addEventListener("click", () => {
-            profileModal.classList.add("hidden");
-        });
-
-        // Click outside to close
-        profileModal.addEventListener("click", (event) => {
-            if (event.target === profileModal) {
-                profileModal.classList.add("hidden");
-            }
-        });
-        
         function parseInput(value) {
             return value
                 .split(",")
@@ -348,34 +403,43 @@
                 .filter(item => item.length > 0);
         }
 
-        function saveUserProfile() {
-            const profile = {
-                genres: parseInput(document.getElementById("profile-genres").value),
-                actors: parseInput(document.getElementById("profile-actors").value),
-                directors: parseInput(document.getElementById("profile-directors").value),
-                likedMovies: parseInput(document.getElementById("profile-liked-movies").value)
+        function getEmptyProfile() {
+            return {
+                genres: [],
+                actors: [],
+                directors: [],
+                likedMovies: []
             };
-
-            localStorage.setItem("movieMatchProfile", JSON.stringify(profile));
-            alert("Preferences saved!");
         }
 
         function loadUserProfile() {
             const savedProfile = localStorage.getItem("movieMatchProfile");
 
             if (!savedProfile) {
-                return {
-                    genres: [],
-                    actors: [],
-                    directors: [],
-                    likedMovies: []
-                };
+                return getEmptyProfile();
             }
 
             return JSON.parse(savedProfile);
         }
 
-        function fillProfileForm() {
+        function saveUserProfile(profile) {
+            localStorage.setItem("movieMatchProfile", JSON.stringify(profile));
+        }
+
+        function formatList(items) {
+            return items && items.length > 0 ? items.join(", ") : "None saved";
+        }
+
+        function updateProfileView() {
+            const profile = loadUserProfile();
+
+            document.getElementById("view-genres").textContent = formatList(profile.genres);
+            document.getElementById("view-actors").textContent = formatList(profile.actors);
+            document.getElementById("view-directors").textContent = formatList(profile.directors);
+            document.getElementById("view-liked-movies").textContent = formatList(profile.likedMovies);
+        }
+
+        function fillProfileEditForm() {
             const profile = loadUserProfile();
 
             document.getElementById("profile-genres").value = profile.genres.join(", ");
@@ -384,7 +448,208 @@
             document.getElementById("profile-liked-movies").value = profile.likedMovies.join(", ");
         }
 
-        document.addEventListener("DOMContentLoaded", fillProfileForm);
+        openProfileViewBtn.addEventListener("click", () => {
+            updateProfileView();
+            profileViewModal.classList.remove("hidden");
+        });
+
+        closeProfileViewBtn.addEventListener("click", () => {
+            profileViewModal.classList.add("hidden");
+        });
+
+        openProfileEditBtn.addEventListener("click", () => {
+            editableProfile = loadUserProfile();
+
+            genrePicker.renderChips();
+            actorPicker.renderChips();
+            directorPicker.renderChips();
+            likedMoviePicker.renderChips();
+
+            profileViewModal.classList.add("hidden");
+            profileEditModal.classList.remove("hidden");
+        });
+
+        closeProfileEditBtn.addEventListener("click", () => {
+            profileEditModal.classList.add("hidden");
+        });
+
+        saveProfileBtn.addEventListener("click", () => {
+            saveUserProfile(editableProfile);
+
+            profileEditModal.classList.add("hidden");
+            updateProfileView();
+            profileViewModal.classList.remove("hidden");
+        });
+
+        profileViewModal.addEventListener("click", (event) => {
+            if (event.target === profileViewModal) {
+                profileViewModal.classList.add("hidden");
+            }
+        });
+
+        profileEditModal.addEventListener("click", (event) => {
+            if (event.target === profileEditModal) {
+                profileEditModal.classList.add("hidden");
+            }
+        });
+
+        // Initialize profile view on page load
+        let editableProfile = {
+            genres: [],
+            actors: [],
+            directors: [],
+            likedMovies: []
+        };
+
+        function createPreferencePicker(config) {
+            const input = document.getElementById(config.inputId);
+            const suggestionList = document.getElementById(config.suggestionId);
+            const chipContainer = document.getElementById(config.chipId);
+
+            function renderChips() {
+                chipContainer.innerHTML = "";
+
+                editableProfile[config.profileKey].forEach(value => {
+                    const chip = document.createElement("span");
+                    chip.className = "preference-chip";
+                    chip.textContent = value;
+
+                    const removeBtn = document.createElement("button");
+                    removeBtn.type = "button";
+                    removeBtn.textContent = "×";
+                    removeBtn.className = "chip-remove";
+
+                    removeBtn.addEventListener("click", () => {
+                        editableProfile[config.profileKey] =
+                            editableProfile[config.profileKey].filter(item => item !== value);
+                        renderChips();
+                    });
+
+                    chip.appendChild(removeBtn);
+                    chipContainer.appendChild(chip);
+                });
+            }
+
+            function addPreference(value) {
+                if (!value) return;
+
+                const alreadyExists = editableProfile[config.profileKey]
+                    .some(item => item.toLowerCase() === value.toLowerCase());
+
+                if (!alreadyExists) {
+                    editableProfile[config.profileKey].push(value);
+                }
+
+                input.value = "";
+                suggestionList.hidden = true;
+                suggestionList.innerHTML = "";
+                renderChips();
+            }
+
+            function renderSuggestions(query) {
+                const normalizedQuery = query.trim().toLowerCase();
+
+                if (!normalizedQuery) {
+                    suggestionList.hidden = true;
+                    suggestionList.innerHTML = "";
+                    return;
+                }
+
+                const selectedValues = new Set(
+                    editableProfile[config.profileKey].map(item => item.toLowerCase())
+                );
+
+                const matches = config.options
+                    .filter(option =>
+                        option.toLowerCase().includes(normalizedQuery) &&
+                        !selectedValues.has(option.toLowerCase())
+                    )
+                    .slice(0, 25);
+
+                suggestionList.innerHTML = "";
+
+                if (matches.length === 0) {
+                    suggestionList.hidden = true;
+                    return;
+                }
+
+                matches.forEach(option => {
+                    const li = document.createElement("li");
+                    li.textContent = option;
+                    li.className = "preference-suggestion-item";
+
+                    li.addEventListener("mousedown", event => {
+                        event.preventDefault();
+                        addPreference(option);
+                    });
+
+                    suggestionList.appendChild(li);
+                });
+
+                suggestionList.hidden = false;
+            }
+
+            input.addEventListener("input", () => {
+                renderSuggestions(input.value);
+            });
+
+            input.addEventListener("keydown", event => {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+
+                    const firstSuggestion = suggestionList.querySelector(".preference-suggestion-item");
+
+                    if (firstSuggestion) {
+                        addPreference(firstSuggestion.textContent);
+                    }
+                }
+
+                if (event.key === "Escape") {
+                    suggestionList.hidden = true;
+                }
+            });
+
+            document.addEventListener("click", event => {
+                if (!input.contains(event.target) && !suggestionList.contains(event.target)) {
+                    suggestionList.hidden = true;
+                }
+            });
+
+            return {
+                renderChips
+            };
+        }
+        const genrePicker = createPreferencePicker({
+            inputId: "genre-search",
+            suggestionId: "genre-suggestions",
+            chipId: "genre-chips",
+            profileKey: "genres",
+            options: preferenceOptions.genres
+        });
+
+        const actorPicker = createPreferencePicker({
+            inputId: "actor-search",
+            suggestionId: "actor-suggestions",
+            chipId: "actor-chips",
+            profileKey: "actors",
+            options: preferenceOptions.actors
+        });
+
+        const directorPicker = createPreferencePicker({
+            inputId: "director-search",
+            suggestionId: "director-suggestions",
+            chipId: "director-chips",
+            profileKey: "directors",
+            options: preferenceOptions.directors
+        });
+
+        const likedMoviePicker = createPreferencePicker({
+            inputId: "liked-movie-search",
+            suggestionId: "liked-movie-suggestions",
+            chipId: "liked-movie-chips",
+            profileKey: "likedMovies",
+            options: preferenceOptions.likedMovies
+        });
     </script>
 </body>
 </html>

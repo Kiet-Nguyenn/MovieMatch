@@ -2,12 +2,45 @@ import math
 from typing import List, Dict, Set, Optional, Tuple
 from src.data import Movie, Dataset
 
+def normalize_text(value: str) -> str:
+    return (value or "").strip().lower()
+
+
+def apply_user_preferences(movie: Movie, user_profile: Optional[Dict], base_score: float) -> float:
+    if not user_profile:
+        return base_score
+
+    bonus = 0.0
+
+    preferred_genres = {normalize_text(g) for g in user_profile.get("genres", [])}
+    preferred_actors = {normalize_text(a) for a in user_profile.get("actors", [])}
+    preferred_directors = {normalize_text(d) for d in user_profile.get("directors", [])}
+    liked_movies = {normalize_text(m) for m in user_profile.get("likedMovies", [])}
+
+    movie_genres = {normalize_text(g) for g in movie.genres}
+    movie_cast = {normalize_text(a) for a in movie.cast}
+    movie_director = normalize_text(movie.director)
+    movie_title = normalize_text(movie.title)
+
+    if preferred_genres and movie_genres.intersection(preferred_genres):
+        bonus += 0.15
+
+    if preferred_actors and movie_cast.intersection(preferred_actors):
+        bonus += 0.10
+
+    if preferred_directors and movie_director in preferred_directors:
+        bonus += 0.10
+
+    if liked_movies and movie_title in liked_movies:
+        bonus += 0.20
+
+    return base_score + bonus
 
 class Recommender:
     """Base class for movie recommenders."""
     
     def recommend(self, seed_movie: Movie, dataset: Dataset, 
-                  num_recommendations: int = 10) -> List[Tuple[Movie, float]]:
+                  num_recommendations: int = 10, user_profile: Optional[Dict] = None) -> List[Tuple[Movie, float]]:
         """
         Generate recommendations based on a seed movie.
         
@@ -57,7 +90,7 @@ class ContentBasedRecommender(Recommender):
         self.popularity_weight /= total
     
     def recommend(self, seed_movie: Movie, dataset: Dataset,
-                  num_recommendations: int = 10) -> List[Tuple[Movie, float]]:
+                  num_recommendations: int = 10, user_profile: Optional[Dict] = None) -> List[Tuple[Movie, float]]:
         """Generate recommendations based on content similarity."""
         scores = {}
         
@@ -66,6 +99,7 @@ class ContentBasedRecommender(Recommender):
                 continue
             
             similarity = self._calculate_similarity(seed_movie, movie)
+            similarity = apply_user_preferences(movie, user_profile, similarity)
             scores[movie.id] = similarity
         
         # Sort by similarity score and return top recommendations
@@ -180,7 +214,7 @@ class PopularityRecommender(Recommender):
         self.rating_threshold = rating_threshold
     
     def recommend(self, seed_movie: Movie, dataset: Dataset,
-                  num_recommendations: int = 10) -> List[Tuple[Movie, float]]:
+                  num_recommendations: int = 10, user_profile: Optional[Dict] = None) -> List[Tuple[Movie, float]]:
         """Generate recommendations based on popularity in same genres."""
         # Filter movies in the same genres
         candidates = set()
@@ -197,6 +231,7 @@ class PopularityRecommender(Recommender):
             if movie and movie.rating >= self.rating_threshold:
                 # Boost score for movies with higher ratings
                 score = movie.rating * 0.7 + (movie.metascore / 10.0) * 0.3
+                score = apply_user_preferences(movie, user_profile, score)
                 scores[movie_id] = score
         
         # Sort by score and return top recommendations
@@ -225,16 +260,16 @@ class HybridRecommender(Recommender):
         self.popularity_recommender = PopularityRecommender()
     
     def recommend(self, seed_movie: Movie, dataset: Dataset,
-                  num_recommendations: int = 10) -> List[Tuple[Movie, float]]:
+                  num_recommendations: int = 10, user_profile: Optional[Dict] = None) -> List[Tuple[Movie, float]]:
         """Generate hybrid recommendations."""
         # Get content-based recommendations
         content_recs = self.content_recommender.recommend(
-            seed_movie, dataset, num_recommendations * 2)
+            seed_movie, dataset, num_recommendations * 2, user_profile)
         content_scores = {movie.id: score for movie, score in content_recs}
         
         # Get popularity-based recommendations
         popularity_recs = self.popularity_recommender.recommend(
-            seed_movie, dataset, num_recommendations * 2)
+            seed_movie, dataset, num_recommendations * 2, user_profile)
         popularity_scores = {movie.id: score for movie, score in popularity_recs}
         
         # Combine scores
@@ -264,7 +299,7 @@ class UserBasedRecommender(Recommender):
     """
     
     def recommend(self, seed_movie: Movie, dataset: Dataset,
-                  num_recommendations: int = 10) -> List[Tuple[Movie, float]]:
+                  num_recommendations: int = 10, user_profile: Optional[Dict] = None) -> List[Tuple[Movie, float]]:
         """
         Generate recommendations based on movies that share genres with seed.
         Uses a simple weighted approach based on genre overlap.
@@ -292,6 +327,7 @@ class UserBasedRecommender(Recommender):
             rating_factor = movie.rating / 10.0  # Normalize rating
             
             score = jaccard * 0.7 + rating_factor * 0.3
+            score = apply_user_preferences(movie, user_profile, score)
             scores[movie.id] = score
         
         # Sort and return
