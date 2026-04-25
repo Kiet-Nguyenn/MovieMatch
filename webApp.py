@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import sys
+import json
 from pathlib import Path
 
 from flask import Flask, render_template, request
@@ -28,6 +29,22 @@ except Exception as e:
 
 movie_autocomplete_options = dataset.get_autocomplete_movie_options() if len(dataset) else []
 movie_id_to_label = {opt["id"]: opt["label"] for opt in movie_autocomplete_options}
+genre_options = sorted(dataset.genres_index.keys()) if len(dataset) else []
+
+actor_options = sorted({
+    actor
+    for movie in dataset.get_all_movies()
+    for actor in movie.cast
+    if actor
+}) if len(dataset) else []
+
+director_options = sorted({
+    movie.director
+    for movie in dataset.get_all_movies()
+    if movie.director
+}) if len(dataset) else []
+
+liked_movie_options = [opt["label"] for opt in movie_autocomplete_options]
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -40,7 +57,20 @@ def home():
     if request.method == "POST":
         draft_query = request.form.get("query", "").strip()
         movie_id = request.form.get("movie_id", "").strip()
+        raw_profile = request.form.get("user_profile", "{}")
         seed_movie = dataset.get_movie(movie_id) if movie_id else None
+
+        try:
+            user_profile = json.loads(raw_profile)
+        except json.JSONDecodeError:
+            user_profile = {
+                "genres": [],
+                "actors": [],
+                "directors": [],
+                "likedMovies": []
+        }
+            
+        print ("Received user profile:", user_profile)
 
         if not movie_id and not draft_query:
             pass
@@ -52,7 +82,7 @@ def home():
 
             for name, recommender in algorithms:
                 try:
-                    recommendations = recommender.recommend(seed_movie, dataset, 5)
+                    recommendations = recommender.recommend(seed_movie, dataset, 5, user_profile)
 
                     if not recommendations:
                         results_by_algorithm[name] = []
@@ -88,6 +118,10 @@ def home():
         results_by_algorithm=results_by_algorithm,
         error_message=error_message,
         movie_autocomplete_options=movie_autocomplete_options,
+        genre_options=genre_options,
+        actor_options=actor_options,
+        director_options=director_options,
+        liked_movie_options=liked_movie_options,
     )
 
 
