@@ -14,9 +14,7 @@ app = Flask(__name__)
 
 algorithms = [
     ("Similar Content", ContentBasedRecommender()),
-    ("Similar Popularity", PopularityRecommender()),
-    ("Hybrid (60% Content + 40% Popularity)", HybridRecommender()),
-    ("User-Based (Collaborative)", UserBasedRecommender())
+    ("Similar Popularity", PopularityRecommender())
 ]
 dataset = Dataset()
 csv_path = Path(__file__).parent / "Top_10000_Movies_IMDb.csv"
@@ -69,8 +67,6 @@ def home():
                 "directors": [],
                 "likedMovies": []
         }
-            
-        print ("Received user profile:", user_profile)
 
         if not movie_id and not draft_query:
             pass
@@ -82,7 +78,7 @@ def home():
 
             for name, recommender in algorithms:
                 try:
-                    recommendations = recommender.recommend(seed_movie, dataset, 5, user_profile)
+                    recommendations = recommender.recommend(seed_movie, dataset, 12, user_profile)
 
                     if not recommendations:
                         results_by_algorithm[name] = []
