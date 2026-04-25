@@ -30,6 +30,7 @@
                 <ul class="movie-suggestions" id="movie-suggestions" role="listbox" hidden></ul>
             </div>
             <button type="submit" class="search-button">Search</button>
+            <button type="button" id="open-profile" class="profile-button">User Preferences</button>
         </form>
     </nav>
 
@@ -90,6 +91,7 @@
         {% endif %}
     </main>
 
+    <!-- Movie Detail Modal -->
     <div id="movie-modal" class="modal hidden">
         <div class="modal-content">
             <button type="button" id="close-modal" class="close-button">&times;</button>
@@ -105,6 +107,27 @@
             <p id="modal-description"></p>
         </div>
     </div>
+
+    <!-- Profile Modal -->
+    <div id="profile-modal" class="modal hidden">
+        <div class="modal-content">
+            <button type="button" id="close-profile" class="close-button">&times;</button>
+
+            <h2 class="modal-title">User Preferences</h2>
+
+            <div class="profile-form">
+                <input id="profile-genres" placeholder="Genres: Action, Sci-Fi">
+                <input id="profile-actors" placeholder="Actors: Leonardo DiCaprio">
+                <input id="profile-directors" placeholder="Directors: Christopher Nolan">
+                <input id="profile-liked-movies" placeholder="Liked Movies: Inception, Interstellar">
+
+                <button type="button" id="save-profile" class="save-button">
+                    Save Preferences
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const modal = document.getElementById("movie-modal");
         const closeModalBtn = document.getElementById("close-modal");
@@ -296,6 +319,72 @@
                 if (match) boundSelection = match.label;
             }
         })();
+
+        const profileModal = document.getElementById("profile-modal");
+        const openProfileBtn = document.getElementById("open-profile");
+        const closeProfileBtn = document.getElementById("close-profile");
+
+        // Open modal
+        openProfileBtn.addEventListener("click", () => {
+            profileModal.classList.remove("hidden");
+        });
+
+        // Close modal
+        closeProfileBtn.addEventListener("click", () => {
+            profileModal.classList.add("hidden");
+        });
+
+        // Click outside to close
+        profileModal.addEventListener("click", (event) => {
+            if (event.target === profileModal) {
+                profileModal.classList.add("hidden");
+            }
+        });
+        
+        function parseInput(value) {
+            return value
+                .split(",")
+                .map(item => item.trim())
+                .filter(item => item.length > 0);
+        }
+
+        function saveUserProfile() {
+            const profile = {
+                genres: parseInput(document.getElementById("profile-genres").value),
+                actors: parseInput(document.getElementById("profile-actors").value),
+                directors: parseInput(document.getElementById("profile-directors").value),
+                likedMovies: parseInput(document.getElementById("profile-liked-movies").value)
+            };
+
+            localStorage.setItem("movieMatchProfile", JSON.stringify(profile));
+            alert("Preferences saved!");
+        }
+
+        function loadUserProfile() {
+            const savedProfile = localStorage.getItem("movieMatchProfile");
+
+            if (!savedProfile) {
+                return {
+                    genres: [],
+                    actors: [],
+                    directors: [],
+                    likedMovies: []
+                };
+            }
+
+            return JSON.parse(savedProfile);
+        }
+
+        function fillProfileForm() {
+            const profile = loadUserProfile();
+
+            document.getElementById("profile-genres").value = profile.genres.join(", ");
+            document.getElementById("profile-actors").value = profile.actors.join(", ");
+            document.getElementById("profile-directors").value = profile.directors.join(", ");
+            document.getElementById("profile-liked-movies").value = profile.likedMovies.join(", ");
+        }
+
+        document.addEventListener("DOMContentLoaded", fillProfileForm);
     </script>
 </body>
 </html>
