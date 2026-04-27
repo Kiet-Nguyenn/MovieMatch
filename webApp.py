@@ -8,12 +8,13 @@ from src.data import Dataset
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from src.recommender import ContentBasedRecommender, PopularityRecommender, HybridRecommender, UserBasedRecommender
+from src.recommender import BM25DescriptionRecommender, ContentBasedRecommender, PopularityRecommender, HybridRecommender
 
 app = Flask(__name__)
 
 algorithms = [
-    ("Similar Content", ContentBasedRecommender()),
+    ("Recommended for You", HybridRecommender()),
+    ("Similar Features", ContentBasedRecommender()),
     ("Similar Popularity", PopularityRecommender())
 ]
 dataset = Dataset()
@@ -78,7 +79,7 @@ def home():
 
             for name, recommender in algorithms:
                 try:
-                    recommendations = recommender.recommend(seed_movie, dataset, 12, user_profile)
+                    recommendations = recommender.recommend(seed_movie, dataset, 5, user_profile)
 
                     if not recommendations:
                         results_by_algorithm[name] = []

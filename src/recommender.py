@@ -36,6 +36,21 @@ def apply_user_preferences(movie: Movie, user_profile: Optional[Dict], base_scor
 
     return base_score + bonus
 
+def normalize_scores(scores):
+        if not scores:
+            return scores
+
+        min_score = min(scores.values())
+        max_score = max(scores.values())
+
+        if max_score == min_score:
+            return {k: 0.0 for k in scores}
+
+        return {
+            k: (v - min_score) / (max_score - min_score)
+            for k, v in scores.items()
+        }
+
 class Recommender:
     """Base class for movie recommenders."""
     
@@ -53,6 +68,8 @@ class Recommender:
             List of (Movie, similarity_score) tuples sorted by score
         """
         raise NotImplementedError
+    
+    
 
 
 class ContentBasedRecommender(Recommender):
@@ -61,9 +78,9 @@ class ContentBasedRecommender(Recommender):
     Features: genre, rating, runtime, metascore, popularity (gross earnings).
     """
     
-    def __init__(self, genre_weight: float = 0.35, rating_weight: float = 0.25,
-                 runtime_weight: float = 0.15, metascore_weight: float = 0.15,
-                 popularity_weight: float = 0.10):
+    def __init__(self, genre_weight: float = 0.50, rating_weight: float = 0.2,
+                 runtime_weight: float = 0.1, metascore_weight: float = 0.05,
+                 popularity_weight: float = 0.15):
         """
         Initialize content-based recommender with feature weights.
         
@@ -100,6 +117,10 @@ class ContentBasedRecommender(Recommender):
             
             similarity = self._calculate_similarity(seed_movie, movie)
             similarity = apply_user_preferences(movie, user_profile, similarity)
+
+            if similarity < 0.3:
+                continue
+
             scores[movie.id] = similarity
         
         # Sort by similarity score and return top recommendations
@@ -172,7 +193,7 @@ class ContentBasedRecommender(Recommender):
         Returns: 0-1 (1 = metascores within 10 points)
         """
         if movie1.metascore == 0 or movie2.metascore == 0:
-            return 0.5  # Neutral score if data missing
+            return 0.0  # Neutral score if data missing
         
         diff = abs(movie1.metascore - movie2.metascore)
         penalty = min(diff / 100.0, 1.0)
@@ -245,92 +266,284 @@ class HybridRecommender(Recommender):
     Hybrid recommender combining content-based and popularity-based approaches.
     """
     
-    def __init__(self, content_weight: float = 0.6, popularity_weight: float = 0.4):
+    def __init__(self, content_weight: float = 0.4,  bm25_weight: float = 0.4, popularity_weight: float = 0.2):
         """
         Initialize hybrid recommender.
         
         Args:
             content_weight: Weight for content-based recommendations (0-1)
+            bm25_weight: Weight for BM25 based recommendations (0-1)
             popularity_weight: Weight for popularity-based recommendations (0-1)
         """
-        self.content_weight = content_weight / (content_weight + popularity_weight)
-        self.popularity_weight = popularity_weight / (content_weight + popularity_weight)
-        
+        total = content_weight + bm25_weight + popularity_weight
+
+        self.content_weight = content_weight / total
+        self.bm25_weight = bm25_weight / total
+        self.popularity_weight = popularity_weight / total
+
         self.content_recommender = ContentBasedRecommender()
+        self.bm25_recommender = BM25DescriptionRecommender()
         self.popularity_recommender = PopularityRecommender()
     
     def recommend(self, seed_movie: Movie, dataset: Dataset,
-                  num_recommendations: int = 10, user_profile: Optional[Dict] = None) -> List[Tuple[Movie, float]]:
-        """Generate hybrid recommendations."""
-        # Get content-based recommendations
+              num_recommendations: int = 10,
+              user_profile: Optional[Dict] = None) -> List[Tuple[Movie, float]]:
+
         content_recs = self.content_recommender.recommend(
-            seed_movie, dataset, num_recommendations * 2, user_profile)
-        content_scores = {movie.id: score for movie, score in content_recs}
-        
-        # Get popularity-based recommendations
+            seed_movie, dataset, num_recommendations * 2, user_profile
+        )
+        bm25_recs = self.bm25_recommender.recommend(
+            seed_movie, dataset, num_recommendations * 2, user_profile
+        )
         popularity_recs = self.popularity_recommender.recommend(
-            seed_movie, dataset, num_recommendations * 2, user_profile)
+            seed_movie, dataset, num_recommendations * 2, user_profile
+        )
+
+        content_scores = {movie.id: score for movie, score in content_recs}
+        bm25_scores = {movie.id: score for movie, score in bm25_recs}
         popularity_scores = {movie.id: score for movie, score in popularity_recs}
+
+        content_scores = normalize_scores(content_scores)
+        bm25_scores = normalize_scores(bm25_scores)
+        popularity_scores = normalize_scores(popularity_scores)
         
-        # Combine scores
-        all_movie_ids = set(content_scores.keys()) | set(popularity_scores.keys())
+
+        all_movie_ids = (
+            set(content_scores.keys())
+            | set(bm25_scores.keys())
+            | set(popularity_scores.keys())
+        )
+
         hybrid_scores = {}
-        
+
         for movie_id in all_movie_ids:
-            content_score = content_scores.get(movie_id, 0.0)
-            popularity_score = popularity_scores.get(movie_id, 0.0)
-            
-            # Normalize and combine
+            movie = dataset.get_movie(movie_id)
+
+            if not movie:
+                continue
+
+            if not (set(seed_movie.genres) & set(movie.genres)):
+                continue
+
             hybrid_scores[movie_id] = (
-                self.content_weight * content_score +
-                self.popularity_weight * popularity_score
+                self.content_weight * content_scores.get(movie_id, 0.0)
+                + self.bm25_weight * bm25_scores.get(movie_id, 0.0)
+                + self.popularity_weight * popularity_scores.get(movie_id, 0.0)
             )
-        
-        # Sort and return
+
         ranked = sorted(hybrid_scores.items(), key=lambda x: x[1], reverse=True)
-        return [(dataset.get_movie(mid), score)
-                for mid, score in ranked[:num_recommendations]]
 
+        return [
+            (dataset.get_movie(movie_id), score)
+            for movie_id, score in ranked[:num_recommendations]
+        ]
 
-class UserBasedRecommender(Recommender):
+class TFIDFDescriptionRecommender(Recommender):
     """
-    Simple user-based collaborative filtering recommender.
-    Finds movies liked by users with similar taste (based on genre preferences).
+    Content-based recommender using TF-IDF on movie descriptions
+    and cosine similarity.
     """
-    
+
     def recommend(self, seed_movie: Movie, dataset: Dataset,
-                  num_recommendations: int = 10, user_profile: Optional[Dict] = None) -> List[Tuple[Movie, float]]:
-        """
-        Generate recommendations based on movies that share genres with seed.
-        Uses a simple weighted approach based on genre overlap.
-        """
-        seed_genres = set(seed_movie.genres)
-        if not seed_genres:
+                  num_recommendations: int = 10,
+                  user_profile: Optional[Dict] = None) -> List[Tuple[Movie, float]]:
+
+        movies = dataset.get_all_movies()
+        documents = {
+            movie.id: normalize_text(movie.description)
+            for movie in movies
+            if movie.description
+        }
+
+        if seed_movie.id not in documents:
             return []
-        
+
+        tfidf_vectors = self._build_tfidf_vectors(documents)
+        seed_vector = tfidf_vectors[seed_movie.id]
+
         scores = {}
-        for movie in dataset.get_all_movies():
+
+        for movie in movies:
             if movie.id == seed_movie.id:
                 continue
-            
-            movie_genres = set(movie.genres)
-            if not movie_genres:
+
+            movie_vector = tfidf_vectors.get(movie.id)
+            if not movie_vector:
                 continue
-            
-            # Count matching genres
-            matching_genres = len(seed_genres & movie_genres)
-            if matching_genres == 0:
+
+            similarity = self._cosine_similarity(seed_vector, movie_vector)
+            similarity = apply_user_preferences(movie, user_profile, similarity)
+
+            if similarity < 0.1:  # lower threshold for text
                 continue
-            
-            # Jaccard similarity with bias toward rating
-            jaccard = matching_genres / len(seed_genres | movie_genres)
-            rating_factor = movie.rating / 10.0  # Normalize rating
-            
-            score = jaccard * 0.7 + rating_factor * 0.3
-            score = apply_user_preferences(movie, user_profile, score)
-            scores[movie.id] = score
-        
-        # Sort and return
+
+            scores[movie.id] = similarity
+
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        return [(dataset.get_movie(mid), score)
-                for mid, score in ranked[:num_recommendations]]
+
+        return [
+            (dataset.get_movie(movie_id), score)
+            for movie_id, score in ranked[:num_recommendations]
+        ]
+
+    def _tokenize(self, text: str) -> List[str]:
+        return [
+            word.strip(".,!?;:()[]{}\"'")
+            for word in text.lower().split()
+            if word.strip(".,!?;:()[]{}\"'")
+        ]
+
+    def _build_tfidf_vectors(self, documents: Dict[int, str]) -> Dict[int, Dict[str, float]]:
+        tokenized_docs = {
+            movie_id: self._tokenize(text)
+            for movie_id, text in documents.items()
+        }
+
+        num_docs = len(tokenized_docs)
+
+        # Document frequency
+        df = {}
+        for tokens in tokenized_docs.values():
+            unique_terms = set(tokens)
+            for term in unique_terms:
+                df[term] = df.get(term, 0) + 1
+
+        vectors = {}
+
+        for movie_id, tokens in tokenized_docs.items():
+            tfidf = {}
+            total_terms = len(tokens)
+
+            if total_terms == 0:
+                vectors[movie_id] = {}
+                continue
+
+            for term in tokens:
+                tf = tokens.count(term) / total_terms
+                idf = math.log((num_docs + 1) / (df[term] + 1)) + 1
+                tfidf[term] = tf * idf
+
+            vectors[movie_id] = tfidf
+
+        return vectors
+
+    def _cosine_similarity(self, vector1: Dict[str, float], vector2: Dict[str, float]) -> float:
+        common_terms = set(vector1.keys()) & set(vector2.keys())
+
+        dot_product = sum(vector1[term] * vector2[term] for term in common_terms)
+
+        magnitude1 = math.sqrt(sum(weight ** 2 for weight in vector1.values()))
+        magnitude2 = math.sqrt(sum(weight ** 2 for weight in vector2.values()))
+
+        if magnitude1 == 0 or magnitude2 == 0:
+            return 0.0
+
+        return dot_product / (magnitude1 * magnitude2)
+
+class BM25DescriptionRecommender(Recommender):
+    """
+    Content-based recommender using BM25 on movie descriptions.
+    The selected movie description acts as the query.
+    """
+
+    def __init__(self, k1: float = 1.5, b: float = 0.75):
+        self.k1 = k1
+        self.b = b
+
+    def recommend(self, seed_movie: Movie, dataset: Dataset,
+                  num_recommendations: int = 10,
+                  user_profile: Optional[Dict] = None) -> List[Tuple[Movie, float]]:
+
+        movies = dataset.get_all_movies()
+
+        documents = {
+            movie.id: normalize_text(movie.description)
+            for movie in movies
+            if movie.description
+        }
+
+        if seed_movie.id not in documents:
+            return []
+
+        tokenized_docs = {
+            movie_id: self._tokenize(text)
+            for movie_id, text in documents.items()
+        }
+
+        query_terms = tokenized_docs[seed_movie.id]
+
+        if not query_terms:
+            return []
+
+        idf = self._calculate_idf(tokenized_docs)
+        avg_doc_length = sum(len(tokens) for tokens in tokenized_docs.values()) / len(tokenized_docs)
+
+        scores = {}
+
+        for movie in movies:
+            if movie.id == seed_movie.id:
+                continue
+
+            doc_terms = tokenized_docs.get(movie.id)
+
+            if not doc_terms:
+                continue
+
+            score = self._bm25_score(query_terms, doc_terms, idf, avg_doc_length)
+            score = apply_user_preferences(movie, user_profile, score)
+
+            scores[movie.id] = score
+
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+        return [
+            (dataset.get_movie(movie_id), score)
+            for movie_id, score in ranked[:num_recommendations]
+        ]
+
+    def _tokenize(self, text: str) -> List[str]:
+        return [
+            word.strip(".,!?;:()[]{}\"'")
+            for word in text.lower().split()
+            if word.strip(".,!?;:()[]{}\"'")
+        ]
+
+    def _calculate_idf(self, tokenized_docs: Dict[int, List[str]]) -> Dict[str, float]:
+        num_docs = len(tokenized_docs)
+        df = {}
+
+        for tokens in tokenized_docs.values():
+            for term in set(tokens):
+                df[term] = df.get(term, 0) + 1
+
+        idf = {}
+
+        for term, freq in df.items():
+            idf[term] = math.log((num_docs - freq + 0.5) / (freq + 0.5) + 1)
+
+        return idf
+
+    def _bm25_score(self, query_terms: List[str], doc_terms: List[str],
+                    idf: Dict[str, float], avg_doc_length: float) -> float:
+
+        score = 0.0
+        doc_length = len(doc_terms)
+        term_frequencies = {}
+
+        for term in doc_terms:
+            term_frequencies[term] = term_frequencies.get(term, 0) + 1
+
+        for term in set(query_terms):
+            if term not in term_frequencies:
+                continue
+
+            tf = term_frequencies[term]
+
+            numerator = tf * (self.k1 + 1)
+            denominator = tf + self.k1 * (
+                1 - self.b + self.b * (doc_length / avg_doc_length)
+            )
+
+            score += idf.get(term, 0.0) * (numerator / denominator)
+
+        return score
